@@ -178,7 +178,7 @@ int intValue(Register R) {
 
 /*
  * Retourne une chaîne de caractères décrivant les 10 à 30 bits
- */
+  printf("%d\n", ~intValue(cpu.alsu.accu)); */
 char* toString(Register R) {
   int i,j=0;
   char* s=(char*)malloc(40*sizeof(char));
@@ -227,11 +227,12 @@ void setZ(ALSU alsu) {
     {
       if (alsu.accu.word[i] == 1)
 	{
-	  alsu.flags[0] = 1;
+	  alsu.flags[0] = 0;
 	  return ;
 	}
       i++;
     }
+  alsu.flags[0] = 1;
 }
 
 /////////////////////////////////////////////////////////
@@ -274,6 +275,7 @@ void nand(ALSU alsu,Register B) {
 	    A.word[i] = 0;
 	  else
 	    A.word[i] = 1;
+	  i++;
 	}
     }
   else
@@ -289,9 +291,10 @@ void nand(ALSU alsu,Register B) {
 	    A.word[i] = 0;
 	  else
 	    A.word[i] = 1;
+	  i++;
 	}
     }
-  alsu.accu = A;
+  copyValue(alsu.accu, A);
   setZ(alsu);
   alsu.flags[1] = 0;
   alsu.flags[2] = 0;
@@ -372,7 +375,46 @@ int* fullAdder(int a,int b,int cin) {
  * Les indicateurs sont positionnés conformément au résultat de l'opération.
  */
 void add(ALSU alsu,Register B) {
-  // à compléter
+  int	a = 0;
+  int	b = 0;
+  int	*res = malloc(sizeof (int) * 2);
+  int	cin = 0;
+  Register R;
+
+  if (alsu.accu.size >= B.size)
+    R = reg(alsu.accu.size);
+  else
+    R = reg(B.size);
+  for (int i = 0; i < alsu.accu.size || i < B.size; i++)
+    {
+      if (i < alsu.accu.size)
+	a = alsu.accu.word[i];
+      else
+	a = 0;
+      if (i < B.size)
+	b = B.word[i];
+      else
+	b = 0;
+      res = fullAdder(a, b, cin);
+      R.word[i] = res[0];
+      cin = res[1];
+    }
+  if ((alsu.accu.word[alsu.accu.size - 1] == 1 && B.word[B.size - 1] == 1)
+      && R.word[R.size - 1] == 0)
+    alsu.flags[2] = 1;
+  else if ((alsu.accu.word[alsu.accu.size - 1] == 0 && B.word[B.size - 1] == 0)
+	   && R.word[R.size - 1] == 1)
+    alsu.flags[2] = 1;
+  else
+    alsu.flags[2] = 0;
+  copyValue(alsu.accu, R);
+  setZ(alsu);
+  alsu.flags[1] = cin;
+  if (intValue(alsu.accu) < 0)
+    alsu.flags[3] = 1;
+  else
+    alsu.flags[3] = 0;
+  free(res);
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -383,22 +425,31 @@ void add(ALSU alsu,Register B) {
  * Négation.
  */
 void not(CPU cpu){
-  // à compléter
+  nand(cpu.alsu, cpu.alsu.accu);
 }
 
 /*
  * Et.
  */
 void and(CPU cpu,Register B) {
-  // à compléter
+  nand(cpu.alsu, B);
+  not(cpu);
 }
 
 
 /*
  * Ou.
  */
-void or(CPU cpu,Register B) {
-  // à compléter
+void or(CPU cpu,Register B)
+{
+  ALSU a;
+
+  a = initALSU(B.size);
+  copyValue(a.accu, B);
+  nand(a, B);
+  copyValue(cpu.R0, cpu.alsu.accu);
+  nand(cpu.alsu, cpu.R0);
+  nand(cpu.alsu, a.accu);
 }
 
 /*
@@ -416,7 +467,25 @@ void xor(CPU cpu,Register B) {
  * Les indicateurs sont positionnés avec le dernier bit "perdu".
  */
 void logicalShift(CPU cpu,int n) {
-  // à compléter
+  if (n > 0)
+    {
+      copyValue(cpu.R0, cpu.alsu.accu);
+      for (int i = 0; i < cpu.alsu.accu.size; i++)
+	cpu.alsu.accu.word[i] = 0;
+      for (int a = 0; a + n < cpu.alsu.accu.size; a++)
+	cpu.alsu.accu.word[a + n] = cpu.R0.word[a];
+    }
+  else
+    {
+      copyValue(cpu.R1, cpu.alsu.accu);
+      for (int i = 0; i < cpu.alsu.accu.size; i++)
+	cpu.alsu.accu.word[i] = 0;
+      for (int a = 0; a < cpu.alsu.accu.size; a++)
+	{
+	  if (a + n >= 0)
+	    cpu.alsu.accu.word[a + n] = cpu.R1.word[a];
+	}
+    }
 }
 
 /////////////////////////////////////////////////////////
@@ -427,14 +496,17 @@ void logicalShift(CPU cpu,int n) {
  * Opposé.
  */
 void opp(CPU cpu) {
-  // à compléter
+  not(cpu);
+  cpu.R0 = initR(cpu.alsu.accu.size, 1);
+  add(cpu.alsu, cpu.R0);
 }
 
 /*
  * Soustraction.
  */
 void sub(CPU cpu,Register B) {
-  // à compléter
+  opp(cpu);
+  add(cpu.alsu, B);
 }
 
 /*
@@ -470,6 +542,7 @@ int main(int argc,char *argv[]) {
   cpu=initCPU(20);
   alsu=cpu.alsu;
   
+
   while (go_on==1) {
     printf("%s",invite);
     scanf("%d",&chosenInt);
