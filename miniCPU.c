@@ -456,7 +456,53 @@ void or(CPU cpu,Register B)
  * Xor.
  */
 void xor(CPU cpu,Register B) {
-  // à compléter
+  Register	A;
+  int		i = 0;
+  int		b = 0;
+  int		r = 0;
+  
+  if (cpu.alsu.accu.size >= B.size)
+    {
+      cpu.R0 = reg(cpu.alsu.accu.size);
+      while (i < cpu.alsu.accu.size)
+	{
+	  if (i > B.size)
+	    b = 0;
+	  else
+	    b = B.word[i];
+	  if ((cpu.alsu.accu.word[i] == 0 && b == 1)
+	      || (cpu.alsu.accu.word[i] == 1 && b == 0))
+	    cpu.R0.word[i] = 1;
+	  else
+	    cpu.R0.word[i] = 0;
+	  i++;
+	}
+    }
+  else
+    {
+      cpu.R1 = reg(B.size);
+      while (i < B.size)
+	{
+	  if (i > cpu.alsu.accu.size)
+	    b = 0;
+	  else
+	    b = cpu.alsu.accu.word[i];
+	  if ((b == 1 && B.word[i] == 0)
+	      || (b == 0 && B.word[i] == 1))
+	    cpu.R0.word[i] = 1;
+	  else
+	    cpu.R0.word[i] = 0;
+	  i++;
+	}
+    }
+  copyValue(cpu.alsu.accu, cpu.R0);
+  setZ(cpu.alsu);
+  cpu.alsu.flags[1] = 0;
+  cpu.alsu.flags[2] = 0;
+  if (intValue(A) < 0)
+    cpu.alsu.flags[3] = 1;
+  else
+    cpu.alsu.flags[3] = 0;
 }
 
 /*
@@ -505,15 +551,35 @@ void opp(CPU cpu) {
  * Soustraction.
  */
 void sub(CPU cpu,Register B) {
-  opp(cpu);
-  add(cpu.alsu, B);
+  CPU cpu2 = initCPU(B.size);
+
+  copyValue(cpu2.alsu.accu, B);
+  opp(cpu2);
+  add(cpu.alsu, cpu2.alsu.accu);
 }
 
 /*
  * Multiplication.
  */
-void mul(CPU cpu,Register B) {
-  // à compléter
+void mul(CPU cpu, Register B){
+  ALSU res = initALSU(cpu.alsu.accu.size);
+
+  for (int i = 0; i + 1 < B.size; i++)
+    {
+      if (B.word[i] == 1 && i == 0)
+	copyValue(res.accu, cpu.alsu.accu);
+      else if (B.word[i] == 0 && i == 0)
+	for (int a = 0; a < res.accu.size; a++)
+	  res.accu.word[a] = 0;
+      logicalShift(cpu, 1);
+      if (B.word[i + 1] == 1)
+	copyValue(cpu.R0, cpu.alsu.accu);
+      else
+	for (int b = 0; b < cpu.R0.size; b++)
+	  cpu.R0.word[b] = 0;
+      add(res, cpu.R0);
+    }
+  copyValue(cpu.alsu.accu, res.accu);
 }
 
 /////////////////////////////////////////////////////////
